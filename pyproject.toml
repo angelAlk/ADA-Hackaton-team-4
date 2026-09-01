@@ -1,0 +1,17 @@
+[project]
+name = "ada-hackaton-team-4"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "angelAlk", email = "angel.alcantara@nubank.com.mx" }
+]
+requires-python = ">=3.14"
+dependencies = []
+
+[project.scripts]
+ada-hackaton-team-4 = "ada_hackaton_team_4:main"
+
+[build-system]
+requires = ["uv_build>=0.12.8,<0.13.0"]
+build-backend = "uv_build"
