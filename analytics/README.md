@@ -1,6 +1,6 @@
 # Analytics
 
-- [`eda.md`](eda.md): exploración y hallazgos.
-- [`modelo.md`](modelo.md): enfoque, variables y evaluación.
-- [`metricas.md`](metricas.md): resultados analíticos.
-- [`controles-calidad.md`](controles-calidad.md): validaciones de datos.
+- [`eda.md`](eda.md): exploration and findings.
+- [`model.md`](model.md): approach, variables, and evaluation.
+- [`metrics.md`](metrics.md): analytical results.
+- [`quality-controls.md`](quality-controls.md): data validations.

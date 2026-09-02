@@ -1,8 +1,8 @@
 # Backlog
 
-| Prioridad | Historia / tarea | Responsable | Estado |
+| Priority | Story / task | Owner | Status |
 | --- | --- | --- | --- |
-| P0 | Definir fuente y contrato de datos |  | Pendiente |
-| P0 | Implementar pipeline de ingesta |  | Pendiente |
-| P0 | Generar análisis y métricas |  | Pendiente |
-| P1 | Publicar dashboard |  | Pendiente |
+| P0 | Define data source and contract |  | Pending |
+| P0 | Implement ingestion pipeline |  | Pending |
+| P0 | Generate analysis and metrics |  | Pending |
+| P1 | Publish dashboard |  | Pending |

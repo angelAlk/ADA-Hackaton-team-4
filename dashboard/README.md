@@ -1,9 +1,9 @@
 # Dashboard
 
 ## QuickSight
-- Enlace público o con acceso para el jurado: _pendiente_
-- Fecha de última actualización: _pendiente_
+- Public link or link with jury access: _pending_
+- Last updated date: _pending_
 
-## Capturas
-Agreguen aquí imágenes exportadas del dashboard como respaldo, incluyendo los
-principales KPI, filtros y conclusiones.
+## Screenshots
+Add exported dashboard images here as a backup, including the main
+KPIs, filters, and conclusions.

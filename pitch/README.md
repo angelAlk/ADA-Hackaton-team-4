@@ -1,11 +1,11 @@
 # Pitch
 
-## Material de presentación
-- Problema y oportunidad.
-- Solución propuesta.
-- Arquitectura y pipeline.
-- Hallazgos, métricas e impacto.
-- Demo del dashboard.
-- Próximos pasos.
+## Presentation material
+- Problem and opportunity.
+- Proposed solution.
+- Architecture and pipeline.
+- Findings, metrics, and impact.
+- Dashboard demo.
+- Next steps.
 
-Incluyan aquí el enlace a las diapositivas y los recursos usados en la exposición.
+Include here the link to the slides and the resources used in the presentation.

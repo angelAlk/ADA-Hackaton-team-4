@@ -1,117 +1,117 @@
-# EDA — Análisis Exploratorio de Datos
+# EDA — Exploratory Data Analysis
 
-**Equipo 4 · Frente B — Fraude, alerta y demora** **Reto:** política de MTU para decidir entre permitir, advertir o aplicar una demora **Dataset:** 4 archivos Parquet · \~1M de filas · 120 días de transacciones
+**Team 4 · Front B — Fraud, alert, and delay** **Challenge:** MTU policy to decide between allow, warn, or apply a delay **Dataset:** 4 Parquet files · ~1M rows · 120 days of transactions
 
 ---
 
-## 1\. Resumen ejecutivo
+## 1. Executive summary
 
-| Hallazgo | Evidencia |
+| Finding | Evidence |
 | :---- | :---- |
-| La política actual captura 4.7% de las estafas | 135 de 2,872 confirmadas |
-| El 99.8% de las demoras son falsos positivos | 24,420 de 24,462 |
-| Las reglas de demora son **peores que el azar** | Lift 0.62x y 0.41x vs tasa base |
-| El MTU no es la señal que discrimina | `mtu_ratio` lift 1.5x vs `device_new_flag` 10.2x |
-| Existe un cambio de régimen en semanas 24–27 | 44.5% de las estafas en 4 de \~20 semanas |
-| La "pérdida capturada" es pérdida **materializada** | 100% de las estafas confirmadas se completaron |
+| The current policy catches 4.7% of scams | 135 of 2,872 confirmed |
+| 99.8% of delays are false positives | 24,420 of 24,462 |
+| The delay rules are **worse than chance** | Lift 0.62x and 0.41x vs. base rate |
+| MTU is not the discriminating signal | `mtu_ratio` lift 1.5x vs. `device_new_flag` 10.2x |
+| There is a regime change in weeks 24–27 | 44.5% of scams in 4 of ~20 weeks |
+| "Captured loss" is **realized** loss | 100% of confirmed scams were completed |
 
 ---
 
-## 2\. Inventario de datos
+## 2. Data inventory
 
-| Archivo | Filas | Columnas | Grano | Llave |
+| File | Rows | Columns | Grain | Key |
 | :---- | :---- | :---- | :---- | :---- |
-| `transactions.parquet` | 901,286 | 14 | Una fila por transacción | `txn_id` |
-| `customer_mtu.parquet` | 90,000 | 9 | Una fila por cliente | `customer_id` |
-| `policy_events.parquet` | 37,925 | 12 | Una fila por evento de política | `event_id`, FK `txn_id` |
-| `scam_reports.parquet` | 4,272 | 6 | Una fila por denuncia | `report_id`, FK `txn_id` |
+| `transactions.parquet` | 901,286 | 14 | One row per transaction | `txn_id` |
+| `customer_mtu.parquet` | 90,000 | 9 | One row per customer | `customer_id` |
+| `policy_events.parquet` | 37,925 | 12 | One row per policy event | `event_id`, FK `txn_id` |
+| `scam_reports.parquet` | 4,272 | 6 | One row per report | `report_id`, FK `txn_id` |
 
-### Integridad referencial
+### Referential integrity
 
-| Cruce | Resultado | Lectura |
+| Join | Result | Reading |
 | :---- | :---- | :---- |
-| `transactions` ∩ `policy_events` | 37,925 / 37,925 | 100% de los eventos tienen transacción |
-| `transactions` ∩ `scam_reports` | 4,272 / 4,272 | 100% de las denuncias tienen transacción |
-| `policy_events` ∩ `scam_reports` | 161 | Transacciones con regla disparada Y denuncia |
+| `transactions` ∩ `policy_events` | 37,925 / 37,925 | 100% of events have a transaction |
+| `transactions` ∩ `scam_reports` | 4,272 / 4,272 | 100% of reports have a transaction |
+| `policy_events` ∩ `scam_reports` | 161 | Transactions with a rule triggered AND a report |
 
-Sin huérfanos. Los cruces por `txn_id` y `customer_id` son completos.
+No orphans. Joins on `txn_id` and `customer_id` are complete.
 
-### Cobertura
+### Coverage
 
-- **4.21%** de las transacciones dispararon alguna regla de política (37,925 / 901,286)  
-- **0.47%** de las transacciones tienen denuncia asociada (4,272 / 901,286)  
-- **2.32%** de las transacciones no se completaron (20,902 / 901,286)
+- **4.21%** of transactions triggered some policy rule (37,925 / 901,286)
+- **0.47%** of transactions have an associated report (4,272 / 901,286)
+- **2.32%** of transactions did not complete (20,902 / 901,286)
 
 ---
 
-## 3\. Esquemas
+## 3. Schemas
 
 ### `transactions`
 
-| Columna | Tipo | Notas |
+| Column | Type | Notes |
 | :---- | :---- | :---- |
 | `txn_id` | integer | PK |
-| `customer_id` | integer | FK a `customer_mtu` |
-| `txn_ts` | timestamp\_ntz | Momento de la transacción |
-| `amount_mxn` | float | Monto |
+| `customer_id` | integer | FK to `customer_mtu` |
+| `txn_ts` | timestamp_ntz | Transaction time |
+| `amount_mxn` | float | Amount |
 | `channel` | string | `spei_out`, `card_online`, `cash_out`, `p2p_nu`, `card_present` |
-| `counterparty_id` | integer | Destino — **no explotado, ver §8** |
-| `counterparty_first_seen_flag` | boolean | Primera vez que este cliente transfiere a este destino |
-| `device_id` | integer | Dispositivo |
-| `device_new_flag` | boolean | Dispositivo nuevo para el cliente |
-| `geo_state` | string | Estado de la transacción |
+| `counterparty_id` | integer | Destination — **not exploited, see §8** |
+| `counterparty_first_seen_flag` | boolean | First time this customer transfers to this destination |
+| `device_id` | integer | Device |
+| `device_new_flag` | boolean | Device new to the customer |
+| `geo_state` | string | Transaction state |
 | `hour_of_day` | byte | 0–23 |
 | `is_weekend` | boolean |  |
-| `mtd_volume_before_mxn` | float | Acumulado del mes **antes** de esta transacción |
-| `completed_flag` | boolean | Si la transacción se completó |
+| `mtd_volume_before_mxn` | float | Month-to-date cumulative **before** this transaction |
+| `completed_flag` | boolean | Whether the transaction completed |
 
 ### `customer_mtu`
 
-| Columna | Tipo | Notas |
+| Column | Type | Notes |
 | :---- | :---- | :---- |
 | `customer_id` | long | PK |
-| `tenure_months` | long | Antigüedad de la cuenta |
-| `income_band` | string | Banda de ingreso |
-| `mtu_declared_mxn` | double | **Techo mensual declarado** — denominador del `mtu_ratio` |
-| `mtu_observed_p95_mxn` | double | p95 del comportamiento real |
-| `avg_ticket_90d_mxn` | double | Ticket promedio 90 días |
-| `prior_scam_report_flag` | boolean | Denuncia previa |
+| `tenure_months` | long | Account age |
+| `income_band` | string | Income band |
+| `mtu_declared_mxn` | double | **Declared monthly ceiling** — denominator of `mtu_ratio` |
+| `mtu_observed_p95_mxn` | double | p95 of actual behavior |
+| `avg_ticket_90d_mxn` | double | Average ticket, 90 days |
+| `prior_scam_report_flag` | boolean | Prior report |
 | `risk_segment` | string | `low`, `medium`, `high` |
-| `home_state` | string | Estado de residencia |
+| `home_state` | string | State of residence |
 
 ### `policy_events`
 
-Contiene `rule_id`, `rule_description`, `action_taken` (`delay` / `scam_alert` / `none`), `policy_holdout_flag`, `minutes_blocked`, `ops_contact_flag`, `customer_proceeded`, `bypass_requested`, `bypass_granted`, `mtu_breach_flag`.
+Contains `rule_id`, `rule_description`, `action_taken` (`delay` / `scam_alert` / `none`), `policy_holdout_flag`, `minutes_blocked`, `ops_contact_flag`, `customer_proceeded`, `bypass_requested`, `bypass_granted`, `mtu_breach_flag`.
 
-> ⚠️ Las últimas cinco son **posteriores a la acción**. Ver §7.
+> ⚠️ The last five are **post-action**. See §7.
 
 ### `scam_reports`
 
-Contiene `confirmed_scam` (boolean), `loss_amount_mxn` (double), `reported_ts` (timestamp), `report_channel` (`app` / `phone` / `chat`).
+Contains `confirmed_scam` (boolean), `loss_amount_mxn` (double), `reported_ts` (timestamp), `report_channel` (`app` / `phone` / `chat`).
 
 ---
 
-## 4\. La variable objetivo
+## 4. The target variable
 
-| `confirmed_scam` | Conteo | Pérdida promedio | Pérdida total |
+| `confirmed_scam` | Count | Average loss | Total loss |
 | :---- | :---- | :---- | :---- |
 | `true` | 2,872 | $2,675.38 | $7,683,695.99 |
 | `false` | 1,400 | $0.00 | $0.00 |
 
-**Tasa base global: 0.319%** (2,872 / 901,286) — desbalance de **313:1**.
+**Global base rate: 0.319%** (2,872 / 901,286) — imbalance of **313:1**.
 
-### Distribución de pérdidas
+### Loss distribution
 
-| Estadístico | Valor |
+| Statistic | Value |
 | :---- | :---- |
-| Promedio | $2,675.38 |
+| Mean | $2,675.38 |
 | p25 | $731.89 |
-| Mediana | $1,820.19 |
+| Median | $1,820.19 |
 | p75 | $3,544.78 |
 | p95 | $7,804.63 |
-| Máximo | $35,175.18 |
+| Max | $35,175.18 |
 
-| Rango de pérdida | Casos | Pérdida total | % del total |
+| Loss range | Cases | Total loss | % of total |
 | :---- | :---- | :---- | :---- |
 | $0–500 | 495 | $139,360 | 1.8% |
 | $500–1K | 445 | $329,238 | 4.3% |
@@ -120,106 +120,115 @@ Contiene `confirmed_scam` (boolean), `loss_amount_mxn` (double), `reported_ts` (
 | $5K–10K | 358 | $2,362,319 | 30.7% |
 | $10K+ | 79 | $1,124,943 | 14.6% |
 
-**El 15.2% de los casos (≥$5K) concentra el 45.3% de las pérdidas.** Esto justifica que la política se diseñe sobre **pérdida esperada** y no sobre probabilidad sola.
+**15.2% of cases (≥$5K) concentrate 45.3% of losses.** This justifies
+designing the policy around **expected loss** rather than probability
+alone.
 
-### Hallazgo crítico: la pérdida equivale al monto
+### Critical finding: loss equals amount
 
-`avg_amount` de transacciones fraudulentas \= **$2,675.38** `avg_loss` de denuncias confirmadas \= **$2,675.38**
+`avg_amount` of fraudulent transactions = **$2,675.38** `avg_loss` of
+confirmed reports = **$2,675.38**
 
-Son idénticos. La pérdida es el monto completo de la transacción, así que:
+They are identical. The loss is the full transaction amount, so:
 
 ```
-pérdida_esperada = P(estafa | x) × amount_mxn
+expected_loss = P(scam | x) × amount_mxn
 ```
 
-No se requiere un modelo de severidad separado.
+A separate severity model is not required.
 
-### Canal de denuncia
+### Report channel
 
-| Canal | Casos | Pérdida promedio |
+| Channel | Cases | Average loss |
 | :---- | :---- | :---- |
 | `app` | 1,641 | $2,678.42 |
 | `phone` | 789 | $2,780.69 |
 | `chat` | 442 | $2,476.10 |
 
-Sin señal diferencial relevante entre canales.
+No relevant differential signal between channels.
 
 ---
 
-## 5\. Diagnóstico de la política actual
+## 5. Diagnosis of the current policy
 
-### Por regla
+### By rule
 
-| Regla | Descripción | Disparos | Acción | Estafas | Exposición | Min. bloqueados | Contactos ops |
+| Rule | Description | Triggers | Action | Scams | Exposure | Min. blocked | Ops contacts |
 | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- |
-| P-01 | `mtu_ratio` \> 1.00 | 20,685 | delay | 41 | $300,673 | 11,232,671 | 6,607 |
-| P-02 | `mtu_ratio` 0.85–1.00 | 9,802 | scam\_alert | 68 | $335,451 | 0 | 0 |
-| P-03 | Txn \> 50% del MTU | 1,320 | scam\_alert | 9 | $168,759 | 0 | 0 |
-| P-04 | Contraparte nueva \+ \>30% MTU | 806 | scam\_alert | 10 | $94,161 | 0 | 0 |
+| P-01 | `mtu_ratio` > 1.00 | 20,685 | delay | 41 | $300,673 | 11,232,671 | 6,607 |
+| P-02 | `mtu_ratio` 0.85–1.00 | 9,802 | scam_alert | 68 | $335,451 | 0 | 0 |
+| P-03 | Txn > 50% of MTU | 1,320 | scam_alert | 9 | $168,759 | 0 | 0 |
+| P-04 | New counterparty + >30% MTU | 806 | scam_alert | 10 | $94,161 | 0 | 0 |
 | P-05 | Cash out 00h–05h | 5,312 | delay | 7 | $4,829 | 2,862,777 | 1,734 |
 | **Total** |  | **37,925** |  | **135** | **$903,873** | **14,095,448** | **8,341** |
 
-### Precisión y lift por regla
+### Precision and lift by rule
 
-Tasa base \= 0.319%
+Base rate = 0.319%
 
-| Regla | Precisión | Lift | Acción |
+| Rule | Precision | Lift | Action |
 | :---- | :---- | :---- | :---- |
-| P-04 | 1.241% | **3.89x** | advertencia |
-| P-02 | 0.694% | 2.18x | advertencia |
-| P-03 | 0.682% | 2.14x | advertencia |
-| P-01 | 0.198% | **0.62x** | **demora** |
-| P-05 | 0.132% | **0.41x** | **demora** |
+| P-04 | 1.241% | **3.89x** | warn |
+| P-02 | 0.694% | 2.18x | warn |
+| P-03 | 0.682% | 2.14x | warn |
+| P-01 | 0.198% | **0.62x** | **delay** |
+| P-05 | 0.132% | **0.41x** | **delay** |
 
-**La inversión es total:** las tres reglas más precisas solo advierten; las dos peores imponen el bloqueo de 12 horas. P-01 y P-05 tienen lift **menor a 1** — una transacción marcada por ellas es *menos* probable de ser fraude que una tomada al azar.
+**The inversion is total:** the three most precise rules only warn; the two
+worst impose the 12-hour block. P-01 and P-05 have lift **below 1** — a
+transaction flagged by them is *less* likely to be fraud than one picked at
+random.
 
-### Eficiencia en la moneda del North Star
+### Efficiency in the North Star currency
 
-| Regla | Horas bloqueadas | Exposición tocada | MXN por hora bloqueada |
+| Rule | Hours blocked | Exposure touched | MXN per hour blocked |
 | :---- | :---- | :---- | :---- |
 | P-01 | 187,211 | $300,673 | $1.61 |
 | P-05 | 47,713 | $4,829 | **$0.10** |
-| P-02/03/04 | 0 | $598,371 | — (sin bloqueo) |
+| P-02/03/04 | 0 | $598,371 | — (no blocking) |
 
-P-05 consume el 20% de toda la fricción del sistema para tocar $4,829.
+P-05 consumes 20% of all system friction to touch $4,829.
 
-### Costo de fricción total
+### Total friction cost
 
-| Métrica | Valor |
+| Metric | Value |
 | :---- | :---- |
-| Clientes legítimos demorados | 24,420 |
-| Clientes legítimos advertidos | 11,062 |
-| **Horas de bloqueo a legítimos** | **234,831** (\~26.8 años-cliente) |
-| Contactos a operaciones | 8,299 |
-| Bypass solicitados / otorgados | 8,299 / 5,912 |
-| Clientes que procedieron pese a la advertencia | 8,668 |
+| Legitimate customers delayed | 24,420 |
+| Legitimate customers warned | 11,062 |
+| **Hours of blocking to legitimate customers** | **234,831** (~26.8 customer-years) |
+| Contacts to operations | 8,299 |
+| Bypass requested / granted | 8,299 / 5,912 |
+| Customers who proceeded despite the warning | 8,668 |
 
-### Efectividad real de las acciones
+### Real effectiveness of the actions
 
-| Acción | Tasa | Efectividad |
+| Action | Rate | Effectiveness |
 | :---- | :---- | :---- |
-| Advertencia | 78.5% procede igual | **21.5%** de disuasión |
-| Demora | 24.2% obtiene bypass | **75.8%** de retención |
-| Duración real del bloqueo | 543 min promedio | **9 horas**, no 12 |
+| Warning | 78.5% proceed anyway | **21.5%** deterrence |
+| Delay | 24.2% obtain a bypass | **75.8%** retention |
+| Actual block duration | 543 min average | **9 hours**, not 12 |
 
-### El contrafactual del holdout
+### The holdout counterfactual
 
-| Grupo | n | Estafas | Tasa |
+| Group | n | Scams | Rate |
 | :---- | :---- | :---- | :---- |
-| Holdout (regla disparó, sin acción) | 2,320 | 12 | 0.517% |
-| Tratado | 35,605 | 123 | 0.345% |
+| Holdout (rule triggered, no action) | 2,320 | 12 | 0.517% |
+| Treated | 35,605 | 123 | 0.345% |
 
-Implica \~33% de reducción relativa: **\~61 estafas y \~$410K prevenidos**.
+Implies a ~33% relative reduction: **~61 scams and ~$410K prevented**.
 
-> ⚠️ Con solo 12 eventos el intervalo de confianza al 95% de la tasa del holdout abarca aproximadamente 0.27%–0.91%, lo que **incluye valores por debajo de la tasa tratada**. Es la única estimación causal disponible, pero es direccional, no concluyente.
+> ⚠️ With only 12 events, the 95% confidence interval of the holdout rate
+> spans approximately 0.27%–0.91%, which **includes values below the
+> treated rate**. This is the only causal estimate available, but it is
+> directional, not conclusive.
 
 ---
 
-## 6\. Análisis de señales
+## 6. Signal analysis
 
-### Comparación estafa vs. legítima (población completa)
+### Scam vs. legitimate comparison (full population)
 
-| Feature | Estafa (n=2,872) | Legítima (n=898,414) | Lift |
+| Feature | Scam (n=2,872) | Legitimate (n=898,414) | Lift |
 | :---- | :---- | :---- | :---- |
 | `device_new_flag` | 37.9% | 3.7% | **10.2x** |
 | `counterparty_first_seen_flag` | 68.0% | 11.4% | **6.0x** |
@@ -227,146 +236,183 @@ Implica \~33% de reducción relativa: **\~61 estafas y \~$410K prevenidos**.
 | `prior_scam_report_flag` | 7.0% | 2.8% | 2.5x |
 | `amount_mxn` | $2,675 | $1,527 | 1.8x |
 | `mtu_ratio` | 0.291 | 0.194 | 1.5x |
-| `hour_of_day` | 14.9 | 13.2 | débil |
-| `is_weekend` | 28.1% | 29.2% | ninguna |
-| `geo_mismatch` | 5.0% | 6.3% | **ninguna (invertida)** |
+| `hour_of_day` | 14.9 | 13.2 | weak |
+| `is_weekend` | 28.1% | 29.2% | none |
+| `geo_mismatch` | 5.0% | 6.3% | **none (inverted)** |
 
-**Conclusión:** las señales de novedad conductual (dispositivo y contraparte) discriminan entre 4 y 7 veces mejor que el MTU. `geo_mismatch` se descarta — no aporta señal.
+**Conclusion:** behavioral novelty signals (device and counterparty)
+discriminate 4 to 7 times better than MTU. `geo_mismatch` is discarded — it
+adds no signal.
 
-### Precisión de las señales individuales (Bayes)
+### Precision of individual signals (Bayes)
 
-| Señal | Volumen si dispara sola | Precisión | Lift |
+| Signal | Volume if triggered alone | Precision | Lift |
 | :---- | :---- | :---- | :---- |
 | `device_new_flag` | 34,615 | **3.14%** | 9.9x |
 | `counterparty_first_seen_flag` | 104,375 | 1.87% | 5.9x |
-| P-04 (mejor regla actual) | 806 | 1.24% | 3.9x |
+| P-04 (best current rule) | 806 | 1.24% | 3.9x |
 
-Un flag booleano crudo de dispositivo nuevo es **2.5x más preciso que la mejor regla de la política actual**, sobre un volumen comparable al de toda la política.
+A raw boolean new-device flag is **2.5x more precise than the best rule in
+the current policy**, over a volume comparable to the entire policy.
 
-### Distribución de `mtu_ratio`
+### `mtu_ratio` distribution
 
-| Estadístico | Valor |
+| Statistic | Value |
 | :---- | :---- |
-| Promedio | 0.194 |
-| Mediana | 0.096 |
+| Mean | 0.194 |
+| Median | 0.096 |
 | p95 | 0.717 |
-| **Máximo** | **5.248** |
+| **Max** | **5.248** |
 
-> El máximo de 5.25 confirma que **el MTU no opera como límite duro** en este dataset. Si el techo bloqueara automáticamente, `mtu_ratio > 1` no debería existir; sin embargo 20,685 transacciones lo rebasan. El MTU funciona como umbral de monitoreo que activa política, no como tope. Premisa documentada.
+> The maximum of 5.25 confirms that **MTU does not operate as a hard
+> limit** in this dataset. If the ceiling blocked automatically,
+> `mtu_ratio > 1` should not exist; yet 20,685 transactions exceed it. MTU
+> functions as a monitoring threshold that triggers policy, not as a cap.
+> Documented premise.
 
 ---
 
-## 7\. Calidad de datos y trampas identificadas
+## 7. Data quality and identified pitfalls
 
-### 7.1 Timestamps en nanosegundos
+### 7.1 Nanosecond timestamps
 
-Los Parquet contienen `TIMESTAMP(NANOS)`, no soportado por Databricks Runtime 11.3+. La lectura directa falla con `Illegal Parquet type: INT64 (TIMESTAMP(NANOS,false))`.
+The Parquet files contain `TIMESTAMP(NANOS)`, not supported by Databricks
+Runtime 11.3+. Direct reading fails with
+`Illegal Parquet type: INT64 (TIMESTAMP(NANOS,false))`.
 
-**Solución adoptada:** cargar con pandas y truncar a microsegundos antes de convertir a Spark.
+**Solution adopted:** load with pandas and truncate to microseconds before
+converting to Spark.
 
 ```py
 pdf[col] = pdf[col].dt.floor("us")
 ```
 
-### 7.2 Columnas posteriores a la acción — prohibidas como features
+### 7.2 Post-action columns — forbidden as features
 
-| Columna | Por qué |
+| Column | Why |
 | :---- | :---- |
-| `customer_proceeded` | Existe solo después de mostrar la advertencia |
-| `bypass_requested` / `bypass_granted` | Existen solo después de imponer la demora |
-| `ops_contact_flag` | Consecuencia de la acción |
-| `minutes_blocked` | Consecuencia de la acción |
+| `customer_proceeded` | Only exists after the warning is shown |
+| `bypass_requested` / `bypass_granted` | Only exist after imposing the delay |
+| `ops_contact_flag` | Consequence of the action |
+| `minutes_blocked` | Consequence of the action |
 
-**Distinción importante:** estas columnas **no pueden entrar al modelo**, pero **sí deben usarse para calibrar la efectividad de cada acción** (de ahí salen el 21.5% y el 75.8%). Son insumos de la función de costo, no del score.
+**Important distinction:** these columns **cannot enter the model**, but
+**should be used to calibrate each action's effectiveness** (that's where
+the 21.5% and 75.8% come from). They are inputs to the cost function, not
+the score.
 
-### 7.3 Población censurada
+### 7.3 Censored population
 
-Las estafas exitosamente prevenidas **nunca se convierten en denuncia**. Por construcción, la etiqueta positiva solo contiene fraudes que ocurrieron y fueron reportados. Consecuencias:
+Scams successfully prevented **never become a report**. By construction,
+the positive label only contains fraud that occurred and was reported.
+Consequences:
 
-- La clase negativa contiene estafas no reportadas → la precisión medida es un **piso**, no el valor real  
-- El éxito de la política es **inobservable** en la etiqueta → el holdout es el único estimador válido
+- The negative class contains unreported scams → the measured precision is
+  a **floor**, not the true value
+- The policy's success is **unobservable** in the label → the holdout is
+  the only valid estimator
 
-### 7.4 "Pérdida capturada" no es pérdida evitada
+### 7.4 "Captured loss" is not avoided loss
 
-Verificación ejecutada:
+Verification run:
 
 ```
 completed_flag | n     | total_loss
 true           | 2,872 | 7,683,695.99
 ```
 
-**El 100% de las estafas confirmadas se completaron.** Los $903,873 de "exposición tocada" son dinero que **se perdió** en transacciones donde la política disparó y falló, no dinero salvado.
+**100% of confirmed scams completed.** The $903,873 of "exposure touched"
+is money that **was lost** on transactions where the policy triggered and
+failed, not money saved.
 
-> Este resultado es en parte tautológico (para que exista pérdida, el dinero tuvo que salir), pero confirma la interpretación de la columna y obliga a renombrar la métrica.
+> This result is partly tautological (for a loss to exist, the money had
+> to leave), but it confirms the column's interpretation and requires
+> renaming the metric.
 
-### 7.5 Nulos
+### 7.5 Nulls
 
-Conteo de nulos en features clave tras los cruces: **0** en `mtu_ratio`, `ticket_ratio`, `mtu_gap_ratio`, `tenure_months`, `prior_scam`, `hour_of_day`.
+Null count in key features after joins: **0** in `mtu_ratio`,
+`ticket_ratio`, `mtu_gap_ratio`, `tenure_months`, `prior_scam`,
+`hour_of_day`.
 
-Aun así, el pipeline implementa **imputación por mediana \+ columna indicadora de faltante** para robustez, en lugar de `na.fill(0)` — rellenar `mtu_ratio` con 0 significaría "consumió 0% de su techo", el valor más seguro posible asignado a un desconocido.
+Even so, the pipeline implements **median imputation + missing indicator
+column** for robustness, instead of `na.fill(0)` — filling `mtu_ratio` with
+0 would mean "consumed 0% of its ceiling," the safest possible value
+assigned to an unknown.
 
-### 7.6 Verificación de fuga temporal
+### 7.6 Temporal leakage check
 
-Features de tabla dimensión (`prior_scam_report_flag`, `avg_ticket_90d_mxn`, `mtu_observed_p95_mxn`) podrían ser snapshots calculados al final del periodo, lo que filtraría el futuro.
+Dimension-table features (`prior_scam_report_flag`, `avg_ticket_90d_mxn`,
+`mtu_observed_p95_mxn`) could be snapshots computed at the end of the
+period, which would leak the future.
 
-**Prueba:** tasa de estafa entre clientes con `prior_scam = 1`, por bloque de semanas:
+**Test:** scam rate among customers with `prior_scam = 1`, by week block:
 
-| Bloque | Transacciones | Tasa de estafa |
+| Block | Transactions | Scam rate |
 | :---- | :---- | :---- |
-| Semanas 1–12 | 4,696 | 0.0070 |
-| Semanas 13–18 | 8,941 | 0.0068 |
-| Semanas 19–23 | 7,456 | 0.0080 |
+| Weeks 1–12 | 4,696 | 0.0070 |
+| Weeks 13–18 | 8,941 | 0.0068 |
+| Weeks 19–23 | 7,456 | 0.0080 |
 
-Estable. Sin evidencia de fuga.
+Stable. No evidence of leakage.
 
-**Prueba de control:** modelo entrenado sin `prior_scam` ni `tenure_months` → AUC-ROC 0.9358 vs 0.9458 del completo. La caída es marginal, confirmando que la señal no depende de esas columnas.
+**Control test:** model trained without `prior_scam` or `tenure_months` →
+ROC-AUC 0.9358 vs. 0.9458 for the full model. The drop is marginal,
+confirming that the signal does not depend on those columns.
 
 ---
 
-## 8\. El patrón emergente: semanas 24–27
+## 8. The emerging pattern: weeks 24–27
 
-### Volumen y severidad por semana
+### Volume and severity by week
 
-| Semana | Denuncias | Pérdida total | Pérdida promedio |
+| Week | Reports | Total loss | Average loss |
 | :---- | :---- | :---- | :---- |
-| 9–23 (15 sem) | 1,592 | $3,146,564 | \~$1,977 |
+| 9–23 (15 wks) | 1,592 | $3,146,564 | ~$1,977 |
 | **24** | 314 | $1,063,553 | **$3,387** |
 | **25** | 422 | $1,511,784 | **$3,582** |
 | **26** | 425 | $1,560,274 | **$3,671** |
 | **27** | 118 | $396,733 | **$3,362** |
 
-**4 de \~20 semanas concentran el 44.5% de las estafas y el 59% de las pérdidas.**
+**4 of ~20 weeks concentrate 44.5% of scams and 59% of losses.**
 
-### Firma conductual del brote
+### Behavioral signature of the outbreak
 
-| Métrica | Semanas 9–23 | Semanas 24–27 |
+| Metric | Weeks 9–23 | Weeks 24–27 |
 | :---- | :---- | :---- |
-| Contraparte nueva | \~0.50 | **0.86–0.88** |
-| Dispositivo nuevo | \~0.32 | **0.43–0.47** |
-| Hora promedio | \~12.3 | **17.3–17.9** |
-| Monto promedio | \~$1,900 | **$3,362–$3,671** |
+| New counterparty | ~0.50 | **0.86–0.88** |
+| New device | ~0.32 | **0.43–0.47** |
+| Average hour | ~12.3 | **17.3–17.9** |
+| Average amount | ~$1,900 | **$3,362–$3,671** |
 
-El patrón es **conductual, no volumétrico**: uso casi universal de contrapartes nunca vistas, desplazado a la tarde-noche, al doble del ticket habitual.
+The pattern is **behavioral, not volumetric**: near-universal use of
+never-before-seen counterparties, shifted to afternoon-evening, at double
+the usual ticket size.
 
-### Por qué la política actual es ciega
+### Why the current policy is blind
 
-Las reglas P-01 a P-05 son umbrales **estáticos sobre volumen acumulado**. No tienen componente temporal ni de novedad conductual, así que son estructuralmente incapaces de detectar un cambio de régimen. Sobre estas mismas semanas capturan **6.9%** de las estafas.
+Rules P-01 through P-05 are **static thresholds on cumulative volume**. They
+have no temporal or behavioral-novelty component, so they are structurally
+incapable of detecting a regime change. Over these same weeks they capture
+**6.9%** of the scams.
 
-### Estafas de alto valor
+### High-value scams
 
-| Métrica | Valor |
+| Metric | Value |
 | :---- | :---- |
-| Estafas ≥ $5K | 437 |
-| Capturadas por la política | 69 (15.8%) |
-| **No detectadas** | **368** |
-| Pérdida no detectada | $2,760,571 |
-| Concentración en canal `app` | 202 casos, $1,503,724 |
+| Scams ≥ $5K | 437 |
+| Caught by the policy | 69 (15.8%) |
+| **Undetected** | **368** |
+| Undetected loss | $2,760,571 |
+| Concentration in `app` channel | 202 cases, $1,503,724 |
 
-### Línea de investigación pendiente
+### Pending line of investigation
 
-`counterparty_id` **no ha sido explotado**. La hipótesis natural del brote son **cuentas mula compartidas** — múltiples víctimas transfiriendo a las mismas contrapartes. Ninguna de las cinco reglas actuales mira ese campo.
+`counterparty_id` **has not been exploited**. The natural hypothesis for
+the outbreak is **shared mule accounts** — multiple victims transferring to
+the same counterparties. None of the five current rules look at that field.
 
-Query propuesto:
+Proposed query:
 
 ```
 scamConfirmed
@@ -377,34 +423,43 @@ scamConfirmed
   .orderBy($"n_scams".desc)
 ```
 
-> ⚠️ Cualquier feature de historial de contraparte debe construirse con ventana **estrictamente causal** (solo denuncias disponibles al momento de la transacción). Los `reported_ts` llegan con demora; usarlos sin restricción produce fuga.
+> ⚠️ Any counterparty-history feature must be built with a **strictly
+> causal** window (only reports available at the time of the transaction).
+> `reported_ts` arrives with delay; using it without restriction produces
+> leakage.
 
 ---
 
-## 9\. Decisiones de modelado derivadas del EDA
+## 9. Modeling decisions derived from the EDA
 
-| Decisión | Justificación (sección) |
+| Decision | Justification (section) |
 | :---- | :---- |
-| Split **temporal** (semanas ≤23 / ≥24), no aleatorio | §8 — el cambio de régimen haría trivial la detección con split aleatorio |
-| Umbrales sobre **pérdida esperada**, no probabilidad | §4 — la pérdida equivale al monto; 45% de pérdidas en 15% de casos |
-| Descartar `geo_mismatch` | §6 — sin señal, ligeramente invertida |
-| Ponderación de clase 456:1 | §4 — desbalance de 313:1 global, 456:1 en train |
-| Excluir columnas post-acción del modelo | §7.2 |
-| Usar columnas post-acción para calibrar efectividad | §7.2, §5 |
-| Reportar **PR-AUC**, no solo ROC-AUC | §4 — clase minoritaria extrema |
-| Guardrail: ninguna zona por debajo de la tasa base | §5 — P-01 y P-05 lo violan hoy |
+| **Temporal** split (weeks ≤23 / ≥24), not random | §8 — the regime change would make detection trivial with a random split |
+| Thresholds on **expected loss**, not probability | §4 — loss equals the amount; 45% of losses in 15% of cases |
+| Discard `geo_mismatch` | §6 — no signal, slightly inverted |
+| Class weighting of 456:1 | §4 — global imbalance of 313:1, 456:1 on train |
+| Exclude post-action columns from the model | §7.2 |
+| Use post-action columns to calibrate effectiveness | §7.2, §5 |
+| Report **PR-AUC**, not only ROC-AUC | §4 — extreme minority class |
+| Guardrail: no zone below the base rate | §5 — P-01 and P-05 violate this today |
 
 ---
 
-## 10\. Limitaciones conocidas
+## 10. Known limitations
 
-1. **La etiqueta no es "fraude", es "fraude reportado y confirmado".** El modelo aprende propensión a denunciar mezclada con propensión a ser estafado.  
-2. **`tenure_months` es la 3ª feature más importante** — no se ha verificado si es riesgo real o comportamiento de denuncia.  
-3. **El score no está calibrado.** La ponderación de clase infla las probabilidades predichas. El ranking es válido (la transformación es monótona), la interpretación en pesos no.  
-4. **La estimación causal descansa en 12 eventos.** Intervalo amplio.  
-5. **`counterparty_id` sin explotar.** Detección de mulas pendiente.  
-6. **Datos sintéticos** con nulos intencionales y posibles fugas declaradas por el reto.
+1. **The label is not "fraud," it is "fraud reported and confirmed."** The
+   model learns propensity to report mixed with propensity to be scammed.
+2. **`tenure_months` is the 3rd most important feature** — it has not been
+   verified whether it is real risk or reporting behavior.
+3. **The score is not calibrated.** Class weighting inflates the predicted
+   probabilities. The ranking is valid (the transformation is monotonic),
+   the peso-value interpretation is not.
+4. **The causal estimate rests on 12 events.** Wide interval.
+5. **`counterparty_id` unexploited.** Mule detection pending.
+6. **Synthetic data** with intentional nulls and possible leakage declared
+   by the challenge.
 
 ---
 
-*Documento vivo. Última actualización tras ejecución sobre dataset completo (901,286 transacciones).*  
+*Living document. Last updated after running on the full dataset (901,286
+transactions).*

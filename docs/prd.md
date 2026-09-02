@@ -1,14 +1,14 @@
 # PRD
 
-## Problema
-_Describan el problema que resuelve la solución._
+## Problem
+_Describe the problem the solution solves._
 
-## Usuarios y necesidad
-_Definan usuario objetivo, necesidad y resultado esperado._
+## Users and need
+_Define target user, need, and expected outcome._
 
-## Alcance
-- Incluido:
-- No incluido:
+## Scope
+- Included:
+- Not included:
 
-## Criterios de éxito
-- 
+## Success criteria
+-

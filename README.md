@@ -1,79 +1,78 @@
 # ADA Hackathon — Team 4
 
-## Objetivo
-Construir una solución basada en datos para el desafío de políticas MTU.
+## Objective
+Build a data-driven solution for the MTU policy challenge.
 
-## Desafío
-Documentar el problema, implementar el pipeline y analizar los resultados para
-proponer una solución medible y presentable al jurado.
+## Challenge
+Document the problem, implement the pipeline, and analyze the results to
+propose a measurable solution that can be presented to the jury.
 
-## Cómo ejecutar el pipeline
+## How to run the pipeline
 
-### Requisitos
+### Requirements
 
 - Python 3.14
 - [`uv`](https://docs.astral.sh/uv/)
-- Coloque los cuatro archivos fuente, no versionados, en `data/raw/`:
+- Place the four source files, not version-controlled, in `data/raw/`:
   `transactions.parquet`, `customer_mtu.parquet`,
-  `policy_events.parquet` y `scam_reports.parquet`
+  `policy_events.parquet`, and `scam_reports.parquet`
 
-Instale las dependencias:
+Install the dependencies:
 
 ```bash
 uv sync --default-index https://pypi.org/simple
 ```
 
-### Ejecución completa
+### Full run
 
-Desde la raíz del repositorio:
+From the repository root:
 
 ```bash
 uv run --frozen python -m pipeline run-all
 ```
 
-Este comando limpia y valida los datos, reconstruye las features, crea el split
-temporal, entrena el modelo, selecciona umbrales con validación y ejecuta la
-comparación final sobre test.
+This command cleans and validates the data, rebuilds the features, creates the
+temporal split, trains the model, selects thresholds via validation, and runs
+the final comparison on the test set.
 
-### Ejecución por etapas
+### Staged run
 
 ```bash
-# 1. Validar y limpiar los cuatro Parquet
+# 1. Validate and clean the four Parquet files
 uv run --frozen python -m pipeline clean
 
-# 2. Reconstruir MTD, enriquecer transacciones y crear model_data
+# 2. Rebuild MTD, enrich transactions, and create model_data
 uv run --frozen python -m pipeline prepare
 
-# 3. Crear splits, entrenar el modelo y seleccionar umbrales en validación
+# 3. Create splits, train the model, and select thresholds on validation
 uv run --frozen python -m pipeline train
 
-# 4. Evaluar test contra P-01–P-05 y el baseline solo-MTU
+# 4. Evaluate the test set against P-01–P-05 and the MTU-only baseline
 uv run --frozen python -m pipeline evaluate
 ```
 
-Cada etapa reutiliza la salida de la anterior. Para empezar desde cero, use
+Each stage reuses the previous stage's output. To start from scratch, use
 `run-all`.
 
-### Salidas
+### Outputs
 
-El flujo conserva los Parquet originales y escribe:
+The flow preserves the original Parquet files and writes:
 
-- `data/processed/cleaned/`: fuentes validadas y reporte de calidad.
-- `data/processed/prepared/`: `master.parquet`, `model_data.parquet` y validación MTU.
-- `artifacts/splits/`: train (semanas 9–21), validación (22–23), test (24–26), IDs y checksums.
-- `artifacts/fraud_model.joblib`: preprocesamiento y modelo entrenados.
-- `artifacts/model_metadata.json`: features, medianas, versiones, métricas y umbrales.
-- `artifacts/evaluation.json`, `policy_comparison.csv` y predicciones de test.
+- `data/processed/cleaned/`: validated sources and quality report.
+- `data/processed/prepared/`: `master.parquet`, `model_data.parquet`, and MTU validation.
+- `artifacts/splits/`: train (weeks 9–21), validation (22–23), test (24–26), IDs and checksums.
+- `artifacts/fraud_model.joblib`: trained preprocessing and model.
+- `artifacts/model_metadata.json`: features, medians, versions, metrics, and thresholds.
+- `artifacts/evaluation.json`, `policy_comparison.csv`, and test predictions.
 
-La pertenencia a cada split es determinista por tiempo; no se asignan filas al
-azar. `random_state=42` controla únicamente las operaciones estocásticas del
-modelo.
+Split membership is deterministic by time; rows are not assigned at random.
+`random_state=42` controls only the model's stochastic operations.
 
-## Inferencia batch
+## Batch inference
 
-La entrada debe contener las columnas de transacción del contrato, incluido el
-acumulado causal `mtd_volume_before_mxn`. El comando rechaza lotes sin ese
-historial en lugar de reconstruirlo a partir de una ventana incompleta.
+The input must contain the transaction columns from the contract, including
+the causal cumulative `mtd_volume_before_mxn`. The command rejects batches
+lacking that history rather than reconstructing it from an incomplete window.
 
 ```bash
 uv run --frozen python -m pipeline predict \
@@ -82,24 +81,24 @@ uv run --frozen python -m pipeline predict \
   --output artifacts/predictions.parquet
 ```
 
-La salida contiene `fraud_score`, riesgo estimado en MXN y decisión
-`allow`/`warn`/`delay`.
+The output contains `fraud_score`, estimated risk in MXN, and the
+`allow`/`warn`/`delay` decision.
 
-## Verificación
+## Verification
 
 ```bash
 uv run --frozen pytest -q
 ```
 
-## Instrucciones adicionales
-1. Revise la documentación en [`docs/`](docs/).
-2. Consulte el contrato y los análisis en [`analytics/`](analytics/).
-3. Abra el material visual en [`dashboard/`](dashboard/) y la presentación en
-   [`pitch/`](pitch/).
+## Additional instructions
+1. Review the documentation in [`docs/`](docs/).
+2. Check the contract and analyses in [`analytics/`](analytics/).
+3. Open the visual material in [`dashboard/`](dashboard/) and the
+   presentation in [`pitch/`](pitch/).
 
-## Índice
-- [`docs/`](docs/): producto, backlog, arquitectura, métricas y decisiones.
-- [`pipeline/`](pipeline/): ingesta, persistencia y evidencias de ejecución.
-- [`analytics/`](analytics/): EDA, modelo, métricas y calidad de datos.
-- [`dashboard/`](dashboard/): enlace o capturas de Amazon QuickSight.
-- [`pitch/`](pitch/): material para la presentación final.
+## Index
+- [`docs/`](docs/): product, backlog, architecture, metrics, and decisions.
+- [`pipeline/`](pipeline/): ingestion, persistence, and run evidence.
+- [`analytics/`](analytics/): EDA, model, metrics, and data quality.
+- [`dashboard/`](dashboard/): Amazon QuickSight link or screenshots.
+- [`pitch/`](pitch/): material for the final presentation.
