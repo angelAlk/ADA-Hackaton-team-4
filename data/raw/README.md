@@ -1,12 +1,11 @@
-# Datos fuente
+# Source data
 
-Coloque en este directorio los cuatro archivos Parquet antes de ejecutar el
-pipeline:
+Place the four Parquet files in this directory before running the pipeline:
 
 - `transactions.parquet`
 - `customer_mtu.parquet`
 - `policy_events.parquet`
 - `scam_reports.parquet`
 
-Los Parquet están excluidos de Git. No coloque aquí datos procesados; el
-pipeline los genera bajo `data/processed/`.
+The Parquet files are excluded from Git. Do not place processed data here; the
+pipeline generates it under `data/processed/`.

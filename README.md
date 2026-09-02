@@ -90,15 +90,9 @@ The output contains `fraud_score`, estimated risk in MXN, and the
 uv run --frozen pytest -q
 ```
 
-## Additional instructions
-1. Review the documentation in [`docs/`](docs/).
-2. Check the contract and analyses in [`analytics/`](analytics/).
-3. Open the visual material in [`dashboard/`](dashboard/) and the
-   presentation in [`pitch/`](pitch/).
-
 ## Index
-- [`docs/`](docs/): product, backlog, architecture, metrics, and decisions.
-- [`pipeline/`](pipeline/): ingestion, persistence, and run evidence.
-- [`analytics/`](analytics/): EDA, model, metrics, and data quality.
+- [`docs/`](docs/): architecture, decision log, and AI usage.
+- [`pipeline/`](pipeline/): ingestion, training, evaluation, and inference code.
+- [`analytics/`](analytics/): data contract, EDA, model, metrics, and data quality.
 - [`dashboard/`](dashboard/): Amazon QuickSight link or screenshots.
 - [`pitch/`](pitch/): material for the final presentation.
