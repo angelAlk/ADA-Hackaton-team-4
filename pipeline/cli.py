@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from dataclasses import replace
 from pathlib import Path
 
@@ -11,7 +12,7 @@ from .config import PipelineConfig
 from .data import clean_sources
 from .evaluation import evaluate_all, optimize_thresholds
 from .features import FEATURE_COLUMNS, prepare_data
-from .inference import predict_parquets
+from .inference import predict_one, predict_parquets
 from .model import load_model, save_model, train_model
 from .split import temporal_split
 
@@ -81,6 +82,17 @@ def build_parser() -> argparse.ArgumentParser:
     predict_parser.add_argument("--transactions", type=Path, required=True)
     predict_parser.add_argument("--customers", type=Path, required=True)
     predict_parser.add_argument("--output", type=Path, required=True)
+
+    predict_one_parser = subparsers.add_parser("predict-one")
+    predict_one_parser.add_argument(
+        "--input",
+        type=Path,
+        default=None,
+        help=(
+            "Path to a JSON file with 'transaction' and 'customer' objects. "
+            "Reads from stdin when omitted."
+        ),
+    )
     return parser
 
 
@@ -109,5 +121,12 @@ def main(argv: list[str] | None = None) -> None:
             args.output,
         )
         print(f"Wrote {len(result):,} predictions to {args.output}")
+    elif args.command == "predict-one":
+        raw = args.input.read_text() if args.input else sys.stdin.read()
+        payload = json.loads(raw)
+        if "transaction" not in payload or "customer" not in payload:
+            raise ValueError("input JSON must have 'transaction' and 'customer' objects")
+        result = predict_one(payload["transaction"], payload["customer"], config.artifacts_dir)
+        print(json.dumps(result, indent=2))
     else:
         commands[args.command](config)

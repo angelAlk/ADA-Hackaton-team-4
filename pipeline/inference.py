@@ -47,3 +47,18 @@ def predict_parquets(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     result.to_parquet(output_path, index=False)
     return result
+
+
+def predict_one(transaction: dict, customer: dict, artifacts_dir: Path) -> dict:
+    transactions = pd.DataFrame([transaction])
+    customers = pd.DataFrame([customer])
+    result = predict(transactions, customers, artifacts_dir)
+    row = result.iloc[0]
+    return {
+        "txn_id": int(row["txn_id"]),
+        "txn_ts": row["txn_ts"].isoformat(),
+        "amount_mxn": float(row["amount_mxn"]),
+        "fraud_score": float(row["fraud_score"]),
+        "peso_risk_mxn": float(row["peso_risk_mxn"]),
+        "decision": str(row["decision"]),
+    }
