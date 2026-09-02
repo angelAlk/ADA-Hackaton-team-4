@@ -1,42 +1,55 @@
 #!/usr/env python
 
-# Merge cleaned transactions with cleaned customer_mtu and add mtu_ratio,
-# writing the result into data/d4_mtu/data/aggregated/transactions_mtu_ratio.parquet.
-# mtu_ratio = (mtd_volume_before_mxn + amount_mxn) / mtu_declared_mxn
+# Validate/reconstruct MTD and add the guarded MTU ratio.
 
 from pathlib import Path
+import json
+import sys
 
 import pandas as pd
 
-DATA_DIR = Path(__file__).parent / "d4_mtu" / "data"
-CLEANED_DIR = DATA_DIR / "cleaned"
-AGGREGATED_DIR = DATA_DIR / "aggregated"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
-TRANSACTIONS_FILE = "transactions.parquet"
-CUSTOMER_MTU_FILE = "customer_mtu.parquet"
-OUT_FILE = "transactions_mtu_ratio.parquet"
+from pipeline.config import PipelineConfig
+from pipeline.features import reconstruct_mtd, validate_mtd
 
 
-def add_mtu_ratio():
-    transactions = pd.read_parquet(CLEANED_DIR / TRANSACTIONS_FILE)
-    customer_mtu = pd.read_parquet(CLEANED_DIR / CUSTOMER_MTU_FILE)
+def add_mtu_ratio() -> tuple[Path, dict]:
+    config = PipelineConfig()
+    transactions = pd.read_parquet(config.cleaned_dir / "transactions.parquet")
+    customer_mtu = pd.read_parquet(config.cleaned_dir / "customer_mtu.parquet")
+    variant, report = validate_mtd(transactions)
+    transactions["mtd_volume_before_mxn"] = reconstruct_mtd(
+        transactions, completed_only=variant == "completed_only"
+    )
 
     df = transactions.merge(
         customer_mtu[["customer_id", "mtu_declared_mxn"]],
         on="customer_id",
         how="left",
+        validate="many_to_one",
     )
-    df["mtu_ratio"] = (df["mtd_volume_before_mxn"] + df["amount_mxn"]) / df["mtu_declared_mxn"]
+    df["mtu_ratio"] = (
+        (df["mtd_volume_before_mxn"] + df["amount_mxn"])
+        / df["mtu_declared_mxn"].where(df["mtu_declared_mxn"] > 0)
+    )
 
-    AGGREGATED_DIR.mkdir(exist_ok=True)
-    out_path = AGGREGATED_DIR / OUT_FILE
+    aggregated_dir = config.aggregated_dir
+    aggregated_dir.mkdir(exist_ok=True)
+    out_path = aggregated_dir / "transactions_mtu_ratio.parquet"
     df.to_parquet(out_path, index=False)
-
-    print(f"{OUT_FILE}: {len(df)} rows -> {out_path.relative_to(DATA_DIR.parent)}")
+    (aggregated_dir / "mtu_validation.json").write_text(
+        json.dumps(report, indent=2, sort_keys=True) + "\n"
+    )
+    return out_path, report
 
 
 def main():
-    add_mtu_ratio()
+    out_path, report = add_mtu_ratio()
+    print(f"{out_path.name}: {out_path}")
+    print(f"MTD variant: {report['selected_variant']}")
 
 
 if __name__ == "__main__":

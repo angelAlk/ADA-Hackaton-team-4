@@ -1,1 +1,6 @@
 data/d4_mtu/
+data/raw/*.parquet
+data/processed/
+artifacts/
+__pycache__/
+*.py[cod]

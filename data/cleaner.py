@@ -1,41 +1,24 @@
 #!/usr/env python
 
-# Dedup and drop rows with nulls from the four d4_mtu parquet files,
-# writing the cleaned result into data/d4_mtu/data/cleaned/. Originals
-# are left untouched.
+# Validate and clean the four source parquet files. Originals are untouched.
 
 from pathlib import Path
+import sys
 
-import pandas as pd
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
-DATA_DIR = Path(__file__).parent / "d4_mtu" / "data"
-CLEANED_DIR = DATA_DIR / "cleaned"
-
-FILES = [
-    "customer_mtu.parquet",
-    "policy_events.parquet",
-    "scam_reports.parquet",
-    "transactions.parquet",
-]
-
-
-def clean_file(name):
-    path = DATA_DIR / name
-    df = pd.read_parquet(path)
-    before = len(df)
-    df = df.drop_duplicates().dropna()
-    after = len(df)
-
-    CLEANED_DIR.mkdir(exist_ok=True)
-    out_path = CLEANED_DIR / name
-    df.to_parquet(out_path, index=False)
-
-    print(f"{name}: {before} -> {after} rows -> {out_path.relative_to(DATA_DIR.parent)}")
+from pipeline.config import PipelineConfig
+from pipeline.data import clean_sources
 
 
 def main():
-    for name in FILES:
-        clean_file(name)
+    config = PipelineConfig()
+    report = clean_sources(config.data_dir, config.cleaned_dir)
+    for name, result in report["tables"].items():
+        print(f"{name}: {result['source_rows']:,} -> {result['clean_rows']:,} rows")
+    print(f"Quality report: {config.cleaned_dir / 'quality_report.json'}")
 
 
 if __name__ == "__main__":
